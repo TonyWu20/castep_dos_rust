@@ -1,0 +1,9 @@
+[package]
+name = "castep_dos_parser"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+derive_builder = "0.20.2"
+thiserror = "2.0.12"
+winnow = "0.7.11"
