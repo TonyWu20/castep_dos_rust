@@ -9,3 +9,6 @@ pub mod helper;
 
 /// Parsing logics and function routines
 pub mod parser;
+
+/// Filtering projectors for PDOS calculations
+pub mod projector_masks {}

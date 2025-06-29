@@ -3,8 +3,9 @@ use thiserror::Error;
 use crate::{
     helper::{HelperError, parse_record, parse_scalar, parse_vec, peek_record},
     pdos_weight_data::{
-        BandData, Header, HeaderBuilder, HeaderBuilderError, KPoint, NumSpins,
-        NumSpinsConvertError, PDOSWeight, SpinIndex, SpinIndexConvertError, WeightsPerSpin,
+        AngularMomentum, AngularMomentumConvertError, BandData, Header, HeaderBuilder,
+        HeaderBuilderError, NumSpins, NumSpinsConvertError, PDOSWeight, SpinIndex,
+        SpinIndexConvertError, WeightsPerKPoint, WeightsPerSpin,
     },
 };
 
@@ -17,6 +18,9 @@ pub enum ParsingError {
     #[error("When try to convert u32 to  `SpinIndex`: {0}")]
     /// Error from converting `u32` to enum `SpinIndex`
     SpinIndex(#[from] SpinIndexConvertError),
+    /// Error from converting `u32` to enum `AngularMomentum`
+    #[error("When try to convert u32 to `AngularMomentum: {0}`")]
+    AngularMomentum(#[from] AngularMomentumConvertError),
     #[error("During parsing: {0}")]
     /// Error from mod `helper`
     HelperError(#[from] HelperError),
@@ -45,7 +49,7 @@ fn parse_pdos_weight(input: &mut &[u8]) -> Result<PDOSWeight, ParsingError> {
     let header = parse_header(input)?;
     let kpoints = (0..header.total_kpoints)
         .map(|_| parse_kpoint(input, &header))
-        .collect::<Result<Vec<KPoint>, ParsingError>>()?;
+        .collect::<Result<Vec<WeightsPerKPoint>, ParsingError>>()?;
     Ok(PDOSWeight::new(header, kpoints))
 }
 
@@ -58,7 +62,10 @@ fn parse_header(input: &mut &[u8]) -> Result<Header, ParsingError> {
 
     let orbital_species = parse_vec::<u32, 4>(input, num_orbitals as usize)?;
     let orbital_ion = parse_vec::<u32, 4>(input, num_orbitals as usize)?;
-    let orbital_am = parse_vec::<u32, 4>(input, num_orbitals as usize)?;
+    let orbital_am = parse_vec::<u32, 4>(input, num_orbitals as usize)?
+        .into_iter()
+        .map(|l| AngularMomentum::try_from(l).map_err(ParsingError::AngularMomentum))
+        .collect::<Result<Vec<AngularMomentum>, ParsingError>>()?;
 
     HeaderBuilder::default()
         .total_kpoints(total_kpoints)
@@ -73,7 +80,7 @@ fn parse_header(input: &mut &[u8]) -> Result<Header, ParsingError> {
 }
 
 /// Parse data for each k-point
-fn parse_kpoint(input: &mut &[u8], header: &Header) -> Result<KPoint, ParsingError> {
+fn parse_kpoint(input: &mut &[u8], header: &Header) -> Result<WeightsPerKPoint, ParsingError> {
     let kp_data = parse_record(input, 28)?;
     let index = u32::from_be_bytes(
         kp_data[0..4]
@@ -95,10 +102,11 @@ fn parse_kpoint(input: &mut &[u8], header: &Header) -> Result<KPoint, ParsingErr
             .try_into()
             .map_err(HelperError::BytesIntoArray)?,
     );
+    let kpoint = [kx, ky, kz];
     let spins = (0..header.num_spins.spin_count())
         .map(|_| parse_weight_per_spin(input, header))
         .collect::<Result<Vec<WeightsPerSpin>, ParsingError>>()?;
-    Ok(KPoint::new(index, kx, ky, kz, spins))
+    Ok(WeightsPerKPoint::new(index, kpoint, spins))
 }
 
 /// Parse weight for each spin inside the record of a k-point
