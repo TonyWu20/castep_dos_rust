@@ -1,4 +1,4 @@
-use thiserror::Error;
+use serde::{Deserialize, Serialize};
 
 /// Implementation details of `AngularMomentum`
 mod angular_momentum;
@@ -120,7 +120,8 @@ impl BandData {
 }
 
 /// The angular momentum expression
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize)]
+#[serde(rename_all = "lowercase")]
 pub enum AngularMomentum {
     /// l = 0
     S,

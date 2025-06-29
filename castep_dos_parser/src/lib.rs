@@ -10,5 +10,9 @@ pub mod helper;
 /// Parsing logics and function routines
 pub mod parser;
 
-/// Filtering projectors for PDOS calculations
-pub mod projector_masks {}
+// /// Filtering projectors for PDOS calculations
+// pub mod projectors {
+//     mod config;
+//     mod engine {}
+//     pub use config::{ConfigError, EnergyGridConfig, PDOSConfig, ProjectorConfig};
+// }
