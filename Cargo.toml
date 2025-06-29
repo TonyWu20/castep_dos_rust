@@ -1,4 +1,4 @@
 [workspace]
 resolver = "3"
-name="castep_dos_rust"
-members = ["castep_dos_parser"]
+name = "castep_dos_rust"
+members = ["castep_pdos_parser"]
