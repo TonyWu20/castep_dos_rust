@@ -1,0 +1,87 @@
+/// Implementation details of `AngularMomentum`
+mod angular_momentum;
+/// Data structs and enums related to band structure
+/// Create wrapper for `Vec<T>`
+/// So we can express the following nested data array:
+/// [nth-kpoint][nth-eigenvalue][nth-orbital weight (f64)]
+/// as:
+/// KpointData<EigenvalueData<Vec<OrbitalWeight>>>
+mod data_expression;
+
+/// Traits implementations for custom data structs and enums
+mod ergonomics_impl;
+
+mod pdos_file;
+/// Spin related structs and enums
+mod spins;
+
+pub use angular_momentum::{AngularChannels, AngularMomentum, AngularMomentumConvertError};
+pub use pdos_file::{Header, HeaderBuilder, HeaderBuilderError};
+pub use pdos_file::{WeightsPerEigen, WeightsPerKPoint, WeightsPerSpin};
+
+pub use data_expression::{
+    EigenvalueVec, KpointVec, KpointWeight, OrbitalState, OrbitalWeight, OrbitalWeightVec, SpinData,
+};
+pub use spins::{NumSpins, NumSpinsConvertError, SpinIndex, SpinIndexConvertError, SpinPolarized};
+
+#[derive(Debug, Clone, PartialEq)]
+/// Parsed `.pdos_weights` with necessary data
+pub struct PDOSWeights {
+    /// Setting of spin polarization
+    pub spin_polarized: SpinPolarized,
+    /// Orbital metadatas
+    pub orbital_states: Vec<OrbitalState>,
+    /// The orbital weights, organized in a 4D array:
+    /// [spin][k-point][eigenvalue][orbital weight]
+    /// dim: 2   nkpt     n_eigen    n_orbs
+    pub orbital_weights: SpinData<KpointVec<EigenvalueVec<OrbitalWeightVec>>>,
+}
+
+impl PDOSWeights {
+    /// Constructor
+    pub fn new(
+        spin_polarized: SpinPolarized,
+        orbital_states: Vec<OrbitalState>,
+        orbital_weights: SpinData<KpointVec<EigenvalueVec<OrbitalWeightVec>>>,
+    ) -> Self {
+        Self {
+            spin_polarized,
+            orbital_states,
+            orbital_weights,
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+/// Parsed `.bands` with necessary data
+pub struct BandStructure {
+    /// Setting of spin polarization
+    pub spin_polarized: SpinPolarized,
+    /// Fermi energy
+    pub fermi_energy: SpinData<f64>,
+    /// K-point weights in the same order of the k-points
+    pub kpoint_weights: KpointVec<KpointWeight>,
+    /// Eigenvalues, organized in a 3D array
+    /// [spin][k-point][eigenvalue]
+    pub eigenvalues: SpinData<KpointVec<EigenvalueVec<f64>>>,
+}
+
+impl BandStructure {
+    /// Construtor
+    pub fn new(
+        spin_polarized: SpinPolarized,
+        fermi_energy: SpinData<f64>,
+        kpoint_weights: KpointVec<KpointWeight>,
+        eigenvalues: SpinData<KpointVec<EigenvalueVec<f64>>>,
+    ) -> Self {
+        Self {
+            spin_polarized,
+            fermi_energy,
+            kpoint_weights,
+            eigenvalues,
+        }
+    }
+}
+
+#[cfg(test)]
+mod test;

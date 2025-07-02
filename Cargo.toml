@@ -1,4 +1,5 @@
 [workspace]
 resolver = "3"
 name = "castep_dos_rust"
-members = ["castep_pdos_parser"]
+members = ["castep_dos", "castep_dos_core"]
+edition = "2024"

@@ -1,12 +1,13 @@
 use thiserror::Error;
 
 use crate::{
-    helper::{HelperError, parse_record, parse_scalar, parse_vec, peek_record},
-    pdos_weight_data::{
-        AngularMomentum, AngularMomentumConvertError, BandData, Header, HeaderBuilder,
-        HeaderBuilderError, NumSpins, NumSpinsConvertError, PDOSWeight, SpinIndex,
-        SpinIndexConvertError, WeightsPerKPoint, WeightsPerSpin,
+    fundamental::{
+        AngularMomentum, AngularMomentumConvertError, EigenvalueVec, Header, HeaderBuilder,
+        HeaderBuilderError, KpointVec, NumSpins, NumSpinsConvertError, OrbitalWeight,
+        OrbitalWeightVec, PDOSWeights, SpinData, SpinIndex, SpinIndexConvertError, WeightsPerEigen,
+        WeightsPerKPoint, WeightsPerSpin,
     },
+    helper::{HelperError, parse_record, parse_scalar, parse_vec, peek_record},
 };
 
 #[derive(Debug, Error)]
@@ -32,7 +33,7 @@ pub enum ParsingError {
     InvalidFormat,
 }
 /// Handles both `.pdos_weights` and `.pdos_bin`
-pub fn parse_pdos_weight_file<'a>(input: &'a mut &'a [u8]) -> Result<PDOSWeight, ParsingError> {
+pub fn parse_pdos_weight_file<'a>(input: &'a mut &'a [u8]) -> Result<PDOSWeights, ParsingError> {
     // Skip the version and header output in the first two records of `.pdos_bin`
     let _version: Result<f64, HelperError> = parse_scalar::<f64, 8>(input);
     if _version.is_ok() {
@@ -45,12 +46,58 @@ pub fn parse_pdos_weight_file<'a>(input: &'a mut &'a [u8]) -> Result<PDOSWeight,
 }
 
 /// function to parse the `.pdos_weight`
-fn parse_pdos_weight(input: &mut &[u8]) -> Result<PDOSWeight, ParsingError> {
+fn parse_pdos_weight(input: &mut &[u8]) -> Result<PDOSWeights, ParsingError> {
     let header = parse_header(input)?;
     let kpoints = (0..header.total_kpoints)
         .map(|_| parse_kpoint(input, &header))
         .collect::<Result<Vec<WeightsPerKPoint>, ParsingError>>()?;
-    Ok(PDOSWeight::new(header, kpoints))
+    let spin_polarized = header.spin_polarized();
+    let orbital_states = header.extract_orbital_states();
+    let per_spin_to_per_kpt_data =
+        |weights_per_spin: &WeightsPerSpin| -> EigenvalueVec<OrbitalWeightVec> {
+            weights_per_spin
+                .bands
+                .iter()
+                .map(|weights_per_eigen| {
+                    weights_per_eigen
+                        .weights
+                        .iter()
+                        .map(|weight| OrbitalWeight::new(*weight))
+                        .collect::<OrbitalWeightVec>()
+                })
+                .collect::<EigenvalueVec<OrbitalWeightVec>>()
+        };
+    let orbital_weights = match header.num_spins {
+        NumSpins::One => {
+            SpinData::NonPolarized(
+                kpoints
+                    .iter() // per k-point
+                    .map(
+                        |weights_per_kpoint| {
+                            per_spin_to_per_kpt_data(weights_per_kpoint.spins.first().unwrap()) // Only one spin
+                        }, // per eigenvalue
+                    )
+                    .collect::<KpointVec<EigenvalueVec<OrbitalWeightVec>>>(),
+            )
+        }
+        NumSpins::Two => {
+            let (up, down) = kpoints
+                .iter()
+                .map(|weights_per_kpoint| {
+                    (
+                        per_spin_to_per_kpt_data(weights_per_kpoint.spins.first().unwrap()),
+                        per_spin_to_per_kpt_data(weights_per_kpoint.spins.get(1).unwrap()),
+                    )
+                })
+                .unzip();
+            SpinData::SpinPolarized([up, down])
+        }
+    };
+    Ok(PDOSWeights::new(
+        spin_polarized,
+        orbital_states,
+        orbital_weights,
+    ))
 }
 
 /// function to parse the header section of  `.pdos_weight`
@@ -121,16 +168,16 @@ fn parse_weight_per_spin(
     let bands = (0..nbands_occ)
         .map(|_| {
             let weights = parse_vec::<f64, 8>(input, header.num_orbitals as usize)?;
-            Ok(BandData::new(weights))
+            Ok(WeightsPerEigen::new(weights))
         })
-        .collect::<Result<Vec<BandData>, ParsingError>>()?;
+        .collect::<Result<Vec<WeightsPerEigen>, ParsingError>>()?;
     Ok(WeightsPerSpin::new(spin_index, nbands_occ, bands))
 }
 #[cfg(test)]
 mod test {
     use std::fs::read;
 
-    use crate::parser::parse_pdos_weight_file;
+    use crate::pdos_weights_parser::parse_pdos_weight_file;
 
     use super::{ParsingError, parse_header};
 
@@ -151,14 +198,14 @@ mod test {
     fn test_spin_pdos_weight() -> Result<(), ParsingError> {
         let pdos_file = read(TEST_PDOS_WEIGHT).unwrap();
         let parsed_pdos = parse_pdos_weight_file(&mut &pdos_file[..])?;
-        dbg!(parsed_pdos.header);
+        dbg!(parsed_pdos.orbital_states);
         Ok(())
     }
     #[test]
     fn test_pdos_weight() -> Result<(), ParsingError> {
         let pdos_file = read(TEST_PDOS_WEIGHT_NO_SPIN).unwrap();
         let parsed_pdos = parse_pdos_weight_file(&mut &pdos_file[..])?;
-        dbg!(parsed_pdos.header);
+        dbg!(parsed_pdos.orbital_states);
         Ok(())
     }
     #[test]
