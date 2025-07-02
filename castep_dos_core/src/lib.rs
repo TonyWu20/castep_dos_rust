@@ -179,7 +179,7 @@ pub mod pdos_compute {
             chart::ChartBuilder,
             prelude::{DrawingAreaErrorKind, IntoDrawingArea, PathElement, SVGBackend},
             series::LineSeries,
-            style::{Color, IntoFont, RGBColor},
+            style::{Color, IntoFont, IntoTextStyle, RGBColor},
         };
 
         use crate::{
@@ -216,6 +216,9 @@ atoms = [1,]
 "#;
         /// #e6e9ef
         const MANTLE: RGBColor = RGBColor(230, 233, 239);
+        /// #1e2030
+        // const MANTLE: RGBColor = RGBColor(49, 50, 68);
+        const TEXT: RGBColor = RGBColor(76, 79, 105);
         /// #dd7878
         const FLAMINGO: RGBColor = RGBColor(221, 120, 120);
         /// #7287fd
@@ -234,22 +237,25 @@ atoms = [1,]
             let plot_name = format!("{plotname}.svg");
             let root = SVGBackend::new(&plot_name, (1600, 900)).into_drawing_area();
             root.fill(&MANTLE)?;
-            let root = root.margin(10, 10, 10, 10);
+            let root = root.margin(10, 10, 20, 10);
             let y_max = pdos.max();
+            let x_min = energy_grid.first().unwrap() - 2.0;
+            let x_max = energy_grid.last().unwrap() + 2.0;
             let mut chart = ChartBuilder::on(&root)
                 .caption(
                     "Projected Density of States",
-                    ("sans-serif", 24).into_font(),
+                    ("source sans pro, bold", 32).into_font().color(&TEXT),
                 )
                 .x_label_area_size(20)
                 .y_label_area_size(40)
-                .build_cartesian_2d(-20f64..20f64, -1f64..y_max)
+                .build_cartesian_2d(x_min..x_max, -1f64..y_max)
                 .unwrap();
             chart
                 .configure_mesh()
                 .disable_mesh()
-                .y_label_style(("sans-serif,bold", 28))
-                .x_label_style(("sans-serif,bold", 28))
+                // .light_line_style(MANTLE)
+                .y_label_style(("source sans pro,bold", 28).with_color(TEXT))
+                .x_label_style(("source sans pro,bold", 28).with_color(TEXT))
                 .draw()
                 .unwrap();
             let s_series = energy_grid
@@ -273,28 +279,36 @@ atoms = [1,]
                 .zip(pdos.f.iter().copied())
                 .collect::<Vec<(f64, f64)>>();
             chart
-                .draw_series(LineSeries::new(s_series, &LAVENDER))
+                .draw_series(LineSeries::new(s_series, LAVENDER.stroke_width(3)))
                 .unwrap()
-                .label("s")
-                .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], LAVENDER));
+                .label("S")
+                .legend(|(x, y)| {
+                    PathElement::new(vec![(x, y), (x + 60, y)], LAVENDER.stroke_width(3))
+                });
             chart
-                .draw_series(LineSeries::new(p_series, &TEAL))
+                .draw_series(LineSeries::new(p_series, TEAL.stroke_width(3)))
                 .unwrap()
-                .label("p")
-                .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], TEAL));
+                .label("P")
+                .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 60, y)], TEAL.stroke_width(3)));
             chart
-                .draw_series(LineSeries::new(d_series, &FLAMINGO))
+                .draw_series(LineSeries::new(d_series, FLAMINGO.stroke_width(3)))
                 .unwrap()
-                .label("d")
-                .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], FLAMINGO));
+                .label("D")
+                .legend(|(x, y)| {
+                    PathElement::new(vec![(x, y), (x + 60, y)], FLAMINGO.stroke_width(3))
+                });
             chart
-                .draw_series(LineSeries::new(f_series, &YELLOW))
+                .draw_series(LineSeries::new(f_series, YELLOW.stroke_width(3)))
                 .unwrap()
-                .label("f")
-                .legend(|(x, y)| PathElement::new(vec![(x, y), (x + 20, y)], YELLOW));
+                .label("F")
+                .legend(|(x, y)| {
+                    PathElement::new(vec![(x, y), (x + 60, y)], YELLOW.stroke_width(3))
+                });
 
             chart
                 .configure_series_labels()
+                .legend_area_size(80)
+                .label_font(("source sans pro, medium", 28).with_color(TEXT))
                 .background_style(MANTLE.mix(0.8))
                 .border_style(BLACK)
                 .draw()?;
@@ -309,9 +323,13 @@ atoms = [1,]
             let bands_parser = BandsParser::new(&bands_file);
             let band_structure = bands_parser.parse_bands_file().unwrap().to_band_structure();
             let config = toml::from_str::<PDOSConfig>(CONFIG).unwrap();
-            let total_points = (40.0_f64 * 100.0_f64).ceil() as usize + 1;
-            let min = -20.0;
-            let max = 20.0;
+            let (min, max) = match band_structure.energy_range() {
+                crate::fundamental::SpinData::NonPolarized((min, max)) => (min, max),
+                crate::fundamental::SpinData::SpinPolarized([up, down]) => {
+                    (up.0.min(down.0), up.1.max(down.1))
+                }
+            };
+            let total_points = (max - min * 100.0_f64).ceil() as usize + 1;
             let energy_grid = (0..total_points)
                 .map(|i| {
                     let fraction = i as f64 / (total_points - 1) as f64;
@@ -352,9 +370,13 @@ atoms = [1,]
             let bands_parser = BandsParser::new(&bands_file);
             let band_structure = bands_parser.parse_bands_file().unwrap().to_band_structure();
             let config = toml::from_str::<PDOSConfig>(CBA_CONFIG).unwrap();
-            let total_points = (40.0_f64 * 100.0_f64).ceil() as usize + 1;
-            let min = -20.0;
-            let max = 20.0;
+            let (min, max) = match band_structure.energy_range() {
+                crate::fundamental::SpinData::NonPolarized((min, max)) => (min, max),
+                crate::fundamental::SpinData::SpinPolarized([up, down]) => {
+                    (up.0.min(down.0), up.1.max(down.1))
+                }
+            };
+            let total_points = (max - min * 100.0_f64).ceil() as usize + 1;
             let energy_grid = (0..total_points)
                 .map(|i| {
                     let fraction = i as f64 / (total_points - 1) as f64;
@@ -373,7 +395,9 @@ atoms = [1,]
                     match result {
                         crate::fundamental::SpinData::NonPolarized(res) => {
                             let csv_path = "Mg2SiO4_Dy_Bandstr_edft_Dy_pdos.csv";
+                            let toml_path = "Mg2SiO4_Dy_Bandstr_edft_Dy_pdos.toml";
                             write(csv_path, res.csv_output(&energy_grid)).unwrap();
+                            write(toml_path, toml::to_string_pretty(&config).unwrap()).unwrap();
                             plot(&energy_grid, &res, "Mg2SiO4_Dy_Bandstr_edft_Dy_pdos").unwrap();
                         }
                         crate::fundamental::SpinData::SpinPolarized(_) => todo!(),
@@ -381,85 +405,4 @@ atoms = [1,]
                 });
         }
     }
-
-    // /// Calculate PDOS for a single spin chanel
-    // fn calc_spin_pdos(
-    //     eigenvalues: &KpointVec<EigenvalueVec<f64>>,
-    //     pdos_weights: &KpointVec<EigenvalueVec<AngularChannels>>,
-    //     kpoint_weights: &KpointVec<KpointWeight>,
-    //     energy_grid: &[f64],
-    //     smearing: f64,
-    // ) -> PDOSResult {
-    //     // precompute Gaussian smearing
-    //     let norm = 1.0 / (smearing * (2.0 * PI).sqrt());
-    //     let two_sigma_sq = 2.0 * smearing.powi(2);
-    //     let prepare_identity = || {
-    //         (
-    //             vec![0.0; energy_grid.len()],
-    //             vec![0.0; energy_grid.len()],
-    //             vec![0.0; energy_grid.len()],
-    //             vec![0.0; energy_grid.len()],
-    //         )
-    //     };
-    //     let sum_vec = |acc: Vec<f64>, e: Vec<f64>| -> Vec<f64> {
-    //         acc.par_iter()
-    //             .zip(e.par_iter())
-    //             .map(|(&a, &b)| a + b)
-    //             .collect()
-    //     };
-
-    //     // Iterate over k-points in parallel
-    //     let (s, p, d, f) = eigenvalues
-    //         .par_iter()
-    //         .zip(pdos_weights.par_iter())
-    //         .zip(kpoint_weights.par_iter())
-    //         .map(|((eigenvalue, pdos_weight), kpoint_weight)| {
-    //             let kw = kpoint_weight.value();
-
-    //             eigenvalue
-    //                 .par_iter()
-    //                 .zip(pdos_weight.par_iter())
-    //                 .map(
-    //                     |(&eigen, am_weights)| -> (Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>) {
-    //                         // smear the eigenvalue contribution to the targeted energy
-    //                         // with gaussian smearing
-    //                         // From 1 1D-array (energy_grid) to 4 1D-array ([eigenvalue smeared * am_weight] * 4)
-    //                         // Use `unzip` to return more than two items requires nesting
-    //                         let (s, (p, (d, f))) = energy_grid
-    //                             .par_iter()
-    //                             .map(|&e| -> (f64, (f64, (f64, f64))) {
-    //                                 let e_delta = e - eigen;
-    //                                 let gauss = norm * (-e_delta.powi(2) / two_sigma_sq).exp();
-    //                                 let s = kw * gauss * am_weights.s;
-    //                                 let p = kw * gauss * am_weights.p;
-    //                                 let d = kw * gauss * am_weights.d;
-    //                                 let f = kw * gauss * am_weights.f;
-    //                                 (s, (p, (d, f)))
-    //                             })
-    //                             .unzip();
-    //                         (s, p, d, f)
-    //                     },
-    //                 )
-    //                 // Fold all eigenvalue results
-    //                 .reduce(prepare_identity, |(s, p, d, f), (e_s, e_p, e_d, e_f)| {
-    //                     (
-    //                         sum_vec(s, e_s),
-    //                         sum_vec(p, e_p),
-    //                         sum_vec(d, e_d),
-    //                         sum_vec(f, e_f),
-    //                     )
-    //                 })
-    //         })
-    //         .reduce(prepare_identity, |acc, e| {
-    //             let (s, p, d, f) = acc;
-    //             let (e_s, e_p, e_d, e_f) = e;
-    //             (
-    //                 sum_vec(s, e_s),
-    //                 sum_vec(p, e_p),
-    //                 sum_vec(d, e_d),
-    //                 sum_vec(f, e_f),
-    //             )
-    //         });
-    //     PDOSResult { s, p, d, f }
-    // }
 }

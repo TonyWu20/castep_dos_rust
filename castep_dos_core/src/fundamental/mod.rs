@@ -15,6 +15,8 @@ mod pdos_file;
 /// Spin related structs and enums
 mod spins;
 
+const HATREE_TO_EV: f64 = 27.211396641308;
+
 pub use angular_momentum::{AngularChannels, AngularMomentum, AngularMomentumConvertError};
 pub use pdos_file::{Header, HeaderBuilder, HeaderBuilderError};
 pub use pdos_file::{WeightsPerEigen, WeightsPerKPoint, WeightsPerSpin};
@@ -80,6 +82,25 @@ impl BandStructure {
             kpoint_weights,
             eigenvalues,
         }
+    }
+
+    /// Returns min and max eigenvalue energy in eV
+    pub fn energy_range(&self) -> SpinData<(f64, f64)> {
+        self.eigenvalues.map(|kpts| {
+            kpts.iter()
+                .map(|kpt_eigenvalues| {
+                    // CASTEP has already sorted the eigenvalues in ascending order
+                    let min = kpt_eigenvalues.first().unwrap() * HATREE_TO_EV;
+                    let max = kpt_eigenvalues.last().unwrap() * HATREE_TO_EV;
+                    (min, max)
+                })
+                .reduce(|(mut acc_min, mut acc_max), (curr_min, curr_max)| {
+                    acc_min = acc_min.min(curr_min);
+                    acc_max = acc_max.max(curr_max);
+                    (acc_min, acc_max)
+                })
+                .unwrap()
+        })
     }
 }
 
