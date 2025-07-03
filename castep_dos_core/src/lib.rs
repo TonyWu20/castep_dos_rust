@@ -323,13 +323,8 @@ atoms = [1,]
             let bands_parser = BandsParser::new(&bands_file);
             let band_structure = bands_parser.parse_bands_file().unwrap().to_band_structure();
             let config = toml::from_str::<PDOSConfig>(CONFIG).unwrap();
-            let (min, max) = match band_structure.energy_range() {
-                crate::fundamental::SpinData::NonPolarized((min, max)) => (min, max),
-                crate::fundamental::SpinData::SpinPolarized([up, down]) => {
-                    (up.0.min(down.0), up.1.max(down.1))
-                }
-            };
-            let total_points = (max - min * 100.0_f64).ceil() as usize + 1;
+            let (min, max) = band_structure.energy_range();
+            let total_points = ((max - min) * 100.0_f64).ceil() as usize + 1;
             let energy_grid = (0..total_points)
                 .map(|i| {
                     let fraction = i as f64 / (total_points - 1) as f64;
@@ -370,13 +365,8 @@ atoms = [1,]
             let bands_parser = BandsParser::new(&bands_file);
             let band_structure = bands_parser.parse_bands_file().unwrap().to_band_structure();
             let config = toml::from_str::<PDOSConfig>(CBA_CONFIG).unwrap();
-            let (min, max) = match band_structure.energy_range() {
-                crate::fundamental::SpinData::NonPolarized((min, max)) => (min, max),
-                crate::fundamental::SpinData::SpinPolarized([up, down]) => {
-                    (up.0.min(down.0), up.1.max(down.1))
-                }
-            };
-            let total_points = (max - min * 100.0_f64).ceil() as usize + 1;
+            let (min, max) = band_structure.energy_range();
+            let total_points = ((max - min) * 100.0_f64).ceil() as usize + 1;
             let energy_grid = (0..total_points)
                 .map(|i| {
                     let fraction = i as f64 / (total_points - 1) as f64;
@@ -391,7 +381,7 @@ atoms = [1,]
                 })
                 .for_each(|projected_weights| {
                     let result =
-                        calculate_pdos(&band_structure, &projected_weights, &energy_grid, 0.1);
+                        calculate_pdos(&band_structure, &projected_weights, &energy_grid, 0.2);
                     match result {
                         crate::fundamental::SpinData::NonPolarized(res) => {
                             let csv_path = "Mg2SiO4_Dy_Bandstr_edft_Dy_pdos.csv";

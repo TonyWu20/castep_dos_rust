@@ -1,3 +1,3 @@
 mod config;
 
-pub use config::{ConfigError, PDOSConfig, ProjectorConfig, Selection, SpeciesSymbol};
+pub use config::{PDOSConfig, ProjectorConfig, Selection, SpeciesSymbol};

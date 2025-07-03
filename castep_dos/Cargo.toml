@@ -1,0 +1,24 @@
+[package]
+name = "castep_dos"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+castep_dos_core = { version = "0.1.0", path = "../castep_dos_core" }
+clap = { version = "4.5.40", features = ["derive"] }
+derive_builder = "0.20.2"
+plotters = { version = "0.3.7", default-features = false, features = ["fontconfig-dlopen", "svg_backend", "line_series"] }
+serde = { version = "1.0.219", features = ["derive"] }
+thiserror = "2.0.12"
+toml = "0.8.23"
+
+
+# [features]
+# default = []
+# x86_64_intel = ["blas-src/intel-mkl"]
+# x86_64_amd = ["blas-src/blis"]
+# aarch64_darwin = ["blas-src/accelerate"]
+
+
+[lib]
+path = "./src/lib.rs"

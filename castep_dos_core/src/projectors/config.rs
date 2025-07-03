@@ -2,21 +2,12 @@ use std::collections::HashMap;
 use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
 
 use crate::fundamental::{
     AngularChannels, AngularMomentum, EigenvalueVec, KpointVec, OrbitalState, OrbitalWeightVec,
     PDOSWeights, SpinData,
 };
 use rayon::iter::{IndexedParallelIterator, IntoParallelRefIterator, ParallelIterator};
-
-#[derive(Debug, Error)]
-/// Error in reading config file
-pub enum ConfigError {
-    /// Min and max of energy grid is reversed
-    #[error("The min and max value of energy grid is reversed.")]
-    ReverseMinMax,
-}
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
 /// Config file for projector specifications
@@ -39,6 +30,24 @@ impl PDOSConfig {
             .iter()
             .map(|mapping| (mapping.species.as_ref(), mapping.rank))
             .collect()
+    }
+
+    /// Generate example
+    pub fn example() -> Self {
+        Self {
+            species_mapping: vec![Mapping {
+                species: SpeciesSymbol("C".to_string()),
+                rank: 1,
+            }],
+            projectors: vec![ProjectorConfig {
+                name: Some("Example".to_string()),
+                label: None,
+                selections: Some(vec![Selection {
+                    species: SpeciesSymbol("C".to_string()),
+                    atoms: Some(vec![1, 2]),
+                }]),
+            }],
+        }
     }
 }
 
