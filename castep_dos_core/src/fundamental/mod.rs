@@ -87,13 +87,13 @@ impl BandStructure {
     /// Returns min and max eigenvalue energy in eV
     /// For spin polarized bands, the min and max of two spins are compared
     /// and returns the smaller and larger one, respectively
-    pub fn energy_range(&self) -> (f64, f64) {
+    pub fn energy_range(&self, smearing: f64) -> (f64, f64) {
         let spins_range = self.eigenvalues.map(|kpts| {
             kpts.iter()
                 .map(|kpt_eigenvalues| {
                     // CASTEP has already sorted the eigenvalues in ascending order
-                    let min = kpt_eigenvalues.first().unwrap() * HATREE_TO_EV;
-                    let max = kpt_eigenvalues.last().unwrap() * HATREE_TO_EV;
+                    let min = (kpt_eigenvalues.first().unwrap() - 10.0 * smearing) * HATREE_TO_EV;
+                    let max = (kpt_eigenvalues.last().unwrap() + 10.0 * smearing) * HATREE_TO_EV;
                     (min, max)
                 })
                 .reduce(|(mut acc_min, mut acc_max), (curr_min, curr_max)| {

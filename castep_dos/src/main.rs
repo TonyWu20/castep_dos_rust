@@ -136,7 +136,7 @@ fn determine_energy_range(
     energy_grid_config: &EnergyGridConfig,
 ) -> (f64, f64) {
     let (e_min, e_max) = (energy_grid_config.min, energy_grid_config.max);
-    let (band_min, band_max) = bands.energy_range();
+    let (band_min, band_max) = bands.energy_range(energy_grid_config.smearing);
     match (e_min, e_max) {
         (None, None) => (band_min, band_max),
         (None, Some(max)) => (band_min, max),

@@ -1,1 +1,5 @@
 /target
+castep_dos_core/*.svg
+castep_dos_core/*.csv
+!castep_dos_core/Cargo.toml
+castep_dos_core/*.toml

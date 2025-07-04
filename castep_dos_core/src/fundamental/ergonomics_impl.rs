@@ -92,8 +92,8 @@ impl IndexMut<usize> for OrbitalWeightVec {
 
 impl From<f64> for OrbitalWeight {
     fn from(value: f64) -> Self {
-        let checked_value = if value < -1.0e-6 { 0.0 } else { value };
-        Self(checked_value)
+        // let checked_value = if value < -1.0e-6 { 0.0 } else { value };
+        Self(value)
     }
 }
 
@@ -123,8 +123,8 @@ impl OrbitalWeight {
 
     /// Constructor
     pub fn new(value: f64) -> Self {
-        let checked_value = if value < -1.0e-6 { 0.0 } else { value };
-        Self(checked_value)
+        // let checked_value = if value < -1.0e-6 { 0.0 } else { value };
+        Self(value)
     }
 }
 
@@ -234,6 +234,28 @@ impl<T> SpinData<T> {
             }
             (SpinData::SpinPolarized([up, down]), SpinData::SpinPolarized([rhs_up, rhs_down])) => {
                 SpinData::SpinPolarized([f(up, rhs_up), f(down, rhs_down)])
+            }
+            _ => unimplemented!(),
+        }
+    }
+    /// Map data on two `SpinData` with same spin polarization settings with a function
+    /// act on the two different data types and produce one new `SpinData`
+    pub fn map_pair_with_spin<U, V, F, G>(
+        &self,
+        rhs: &SpinData<U>,
+        non_spin: F,
+        spin: G,
+    ) -> SpinData<V>
+    where
+        F: Fn(&T, &U) -> V,
+        G: Fn(&T, &U) -> V,
+    {
+        match (self, rhs) {
+            (SpinData::NonPolarized(data), SpinData::NonPolarized(rhs_data)) => {
+                SpinData::NonPolarized(non_spin(data, rhs_data))
+            }
+            (SpinData::SpinPolarized([up, down]), SpinData::SpinPolarized([rhs_up, rhs_down])) => {
+                SpinData::SpinPolarized([spin(up, rhs_up), spin(down, rhs_down)])
             }
             _ => unimplemented!(),
         }
