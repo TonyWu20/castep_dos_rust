@@ -315,3 +315,12 @@ impl<T: Send> FromParallelIterator<T> for EigenvalueVec<T> {
         Self(par_iter.into_par_iter().collect())
     }
 }
+
+impl<T: Send> FromParallelIterator<T> for KpointVec<T> {
+    fn from_par_iter<I>(par_iter: I) -> Self
+    where
+        I: rayon::prelude::IntoParallelIterator<Item = T>,
+    {
+        Self(par_iter.into_par_iter().collect())
+    }
+}

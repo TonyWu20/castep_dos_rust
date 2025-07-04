@@ -72,10 +72,10 @@ pub fn calculate_pdos(
     let fermi_energys = &band_structure.fermi_energy;
     band_eigenvalues
         .map_pair(fermi_energys, |kpts, &e_fermi| {
-            kpts.iter()
+            kpts.par_iter()
                 .map(|eigens| {
                     eigens
-                        .iter()
+                        .par_iter()
                         // Precompute the fermi energy shift
                         .map(|eigenvalue| (eigenvalue - e_fermi) * HATREE_TO_EV)
                         .collect()
@@ -125,33 +125,36 @@ fn calc_spin_pdos(
     // Create energy grid as `Array1` for vectorized operations
     let energy_arr = Array1::from_vec(energy_grid.to_vec());
     // Initialize result array [channels x energy_points]
-    let mut result = Array2::zeros((4, energy_grid.len()));
+    // let mut result = Array2::zeros((4, energy_grid.len()));
 
     // Process each k-point
     // Since the number of k-points is very limited, we don't use parallel
     // iterator here
-    eigenvalues
-        .iter()
-        .zip(pdos_weights.iter())
-        .zip(kpoint_weights.iter())
-        .for_each(|((eigen_k, weights_k), kw)| {
+    let result = eigenvalues
+        .par_iter()
+        .zip(pdos_weights.par_iter())
+        .zip(kpoint_weights.par_iter())
+        .map(|((eigen_k, weights_k), kw)| {
             let kw_val = kw.value();
 
             // Precompute Gaussian factors for all eigenvalues at this k-point
             let factors = eigen_k
                 .par_iter()
                 .map(|&eigen| {
-                    let e_delta = &energy_arr - eigen;
+                    let mut e_delta = &energy_arr - eigen;
                     // kw * 1 / (ω * sqrt(2π)) * exp(-1/2 * (-d / ω)^2)
-                    e_delta.mapv(|d| {
+                    e_delta.par_mapv_inplace(|d| {
                         let gaussian_smearing = (d.powi(2) / smearing.powi(2) * -0.5).exp();
                         kw_val * norm * gaussian_smearing
-                    })
+                    });
+                    e_delta
                 })
                 .collect::<Vec<Array1<f64>>>();
 
             // Process eigenvalues in parallel
-            let kpoint_result = factors
+
+            // Return a result array for four am_channels
+            factors
                 .into_par_iter()
                 .zip(weights_k.par_iter())
                 .map(|(factor_arr, am_weights)| {
@@ -160,14 +163,12 @@ fn calc_spin_pdos(
                     local.row_mut(1).assign(&(&factor_arr * am_weights.p));
                     local.row_mut(2).assign(&(&factor_arr * am_weights.d));
                     local.row_mut(3).assign(&(&factor_arr * am_weights.f));
-
                     local
                 })
                 // Reduce all results of eigenvalues
-                .reduce(|| Array2::zeros((4, energy_grid.len())), |acc, e| acc + e);
-            // Update to the result array
-            result += &kpoint_result;
-        });
+                .reduce(|| Array2::zeros((4, energy_grid.len())), |acc, e| acc + e)
+        })
+        .reduce(|| Array2::zeros((4, energy_grid.len())), |acc, e| acc + e);
     PDOSResult {
         s: result.row(0).to_vec(),
         p: result.row(1).to_vec(),
@@ -178,13 +179,16 @@ fn calc_spin_pdos(
 
 #[cfg(test)]
 mod test {
-    use std::fs::{read, read_to_string, write};
+    use std::{
+        error::Error,
+        fs::{read, read_to_string, write},
+    };
 
     use plotters::{
-        chart::ChartBuilder,
-        prelude::{DrawingAreaErrorKind, IntoDrawingArea, PathElement, SVGBackend},
+        chart::{ChartBuilder, LabelAreaPosition},
+        prelude::{IntoDrawingArea, IntoLinspace, PathElement, SVGBackend},
         series::LineSeries,
-        style::{Color, IntoFont, IntoTextStyle, RGBColor},
+        style::{AsRelative, Color, IntoFont, IntoTextStyle, RGBColor},
     };
 
     use crate::{
@@ -233,31 +237,31 @@ atoms = [1,]
     const TEAL: RGBColor = RGBColor(23, 146, 153);
     /// #4c4f69
     const BLACK: RGBColor = RGBColor(76, 79, 105);
-    fn plot(
-        energy_grid: &[f64],
-        pdos: &PDOSResult,
-        plotname: &str,
-    ) -> Result<(), DrawingAreaErrorKind<std::io::Error>> {
+    fn plot(energy_grid: &[f64], pdos: &PDOSResult, plotname: &str) -> Result<(), Box<dyn Error>> {
         let plot_name = format!("{plotname}.svg");
         let root = SVGBackend::new(&plot_name, (1600, 900)).into_drawing_area();
         root.fill(&MANTLE)?;
         let root = root.margin(10, 10, 20, 10);
         let y_max = pdos.max();
-        let x_min = energy_grid.first().unwrap() - 2.0;
-        let x_max = energy_grid.last().unwrap() + 2.0;
+        let x_min = *energy_grid.first().unwrap();
+        let x_max = *energy_grid.last().unwrap();
         let mut chart = ChartBuilder::on(&root)
             .caption(
                 "Projected Density of States",
-                ("source sans pro, bold", 32).into_font().color(&TEXT),
+                ("source sans pro,bold", 32).into_font().color(&TEXT),
             )
-            .x_label_area_size(20)
-            .y_label_area_size(40)
-            .build_cartesian_2d(x_min..x_max, -1f64..y_max)
+            .set_label_area_size(LabelAreaPosition::Left, (8).percent())
+            .set_label_area_size(LabelAreaPosition::Bottom, (10).percent())
+            .margin((1).percent())
+            .build_cartesian_2d(x_min..x_max, (0.0..y_max).step(2.0))
             .unwrap();
         chart
             .configure_mesh()
-            .disable_mesh()
             // .light_line_style(MANTLE)
+            .disable_x_mesh()
+            .y_desc("DOS (electrons/eV)")
+            .x_desc("Energy (eV)")
+            .axis_desc_style(("source sans pro,bold", 18).into_font().with_color(TEXT))
             .y_label_style(("source sans pro,bold", 28).with_color(TEXT))
             .x_label_style(("source sans pro,bold", 28).with_color(TEXT))
             .draw()
@@ -306,11 +310,11 @@ atoms = [1,]
         chart
             .configure_series_labels()
             .legend_area_size(80)
-            .label_font(("source sans pro, medium", 28).with_color(TEXT))
+            .label_font(("source sans pro,medium", 28).with_color(TEXT))
             .background_style(MANTLE.mix(0.8))
             .border_style(BLACK)
             .draw()?;
-        root.present()
+        Ok(root.present()?)
     }
 
     #[test]

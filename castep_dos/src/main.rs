@@ -2,6 +2,7 @@ use std::{
     fs::{read, read_to_string, write},
     io,
     path::Path,
+    time::Instant,
 };
 
 use castep_dos::{
@@ -62,6 +63,7 @@ fn run(seed: &str) -> Result<(), ExeError> {
     let (e_min, e_max) = determine_energy_range(&bands, &prog_config.energy_grid);
     let energy_grid = generate_grid(e_min, e_max, prog_config.energy_grid.points_per_ev);
     let species_mapping = prog_config.pdos_config.species_mapping();
+    let before = Instant::now();
     prog_config
         .pdos_config
         .projectors
@@ -84,7 +86,13 @@ fn run(seed: &str) -> Result<(), ExeError> {
                 prog_config.energy_grid.smearing,
             );
             result_output(result, seed, &proj_name, &prog_config, &energy_grid)
-        })
+        })?;
+    println!(
+        "PDOS calculations of {} finished in {:.2?}",
+        seed,
+        before.elapsed()
+    );
+    Ok(())
 }
 
 fn load_pdos_calc_files(

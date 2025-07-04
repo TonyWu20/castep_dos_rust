@@ -14,6 +14,7 @@ winnow = { version = "0.7.11", features = ["simd"] }
 
 [dev-dependencies]
 plotters = { version = "0.3.7", default-features = false, features = [
+	"ab_glyph",
 	"svg_backend",
 	"line_series",
 ] }
